@@ -20,42 +20,45 @@ jobs:
           set -euo pipefail
           mkdir -p extracted
           ditto -x -k sources.zip extracted
-          ROOT="$(find extracted -type d -name Keeper -maxdepth 4 | head -1)"
+          ROOT="$(find extracted -maxdepth 4 -type d -name Keeper | head -1)"
           test -n "$ROOT"
+
+          # Preserve the full source tree as an artifact so it can be reviewed and patched.
+          ditto -c -k --sequesterRsrc --keepParent "$ROOT" keeper-source.zip
+
           {
             echo "=== TOOLCHAIN ==="
             xcodebuild -version
             swift --version
             echo
             echo "=== DEMO BALANCE IMPLEMENTATION SEARCH ==="
-            rg -n -i "DemoBalance|demo.balance|balanceOverride|overrideBalance|mockBalance" "$ROOT" --glob '*.swift' --glob '*.yml' --glob '*.yaml' || true
+            grep -RInE "DemoBalance|demo.balance|balanceOverride|overrideBalance|mockBalance" "$ROOT" --include='*.swift' --include='*.yml' --include='*.yaml' || true
             echo
             echo "=== DEMO BALANCE SOURCE FILES ==="
             find "$ROOT" -type f \( -iname '*DemoBalance*' -o -iname '*Balance*Override*' \) | sort
             while IFS= read -r file; do
               echo
               echo "--- SOURCE: $file"
-              sed -n '1,320p' "$file"
+              sed -n '1,360p' "$file"
             done < <(find "$ROOT" -type f \( -iname '*DemoBalance*' -o -iname '*Balance*Override*' \) | sort)
             echo
             echo "=== APP TESTS MATCHING DEMO BALANCE ==="
-            rg -n -C 5 "DemoBalance|demo.balance|balanceOverride" "$ROOT" --glob '*Tests*.swift' || true
+            grep -RIn -C 5 -E "DemoBalance|demo.balance|balanceOverride" "$ROOT" --include='*Tests*.swift' || true
             echo
             echo "=== EXISTING IOS WORKFLOW ==="
             if [ -f "$ROOT/.github/workflows/ios-demo-balance.yml" ]; then
               sed -n '1,260p' "$ROOT/.github/workflows/ios-demo-balance.yml"
             fi
             echo
-            echo "=== PROJECT AND SCHEMES ==="
-            xcodebuild -list -project "$ROOT/Keeper.xcodeproj"
-            echo
-            echo "=== REPOSITORY ROOT FILES ==="
+            echo "=== PROJECT ROOT ==="
             find "$ROOT" -maxdepth 2 -type f | sort | head -200
           } | tee project-inspection.txt
 
-      - name: Upload inspection report
+      - name: Upload source and inspection report
         uses: actions/upload-artifact@v4
         with:
-          name: ios-project-inspection
-          path: project-inspection.txt
+          name: ios-source-inspection
+          path: |
+            project-inspection.txt
+            keeper-source.zip
           if-no-files-found: error

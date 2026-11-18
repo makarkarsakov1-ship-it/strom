@@ -87,22 +87,6 @@ jobs:
           echo "Remaining generated public imports:"
           grep -R -nE '(@_spi\\(Generated\\) public import|^public import (struct )?Foundation\\.|^public import OpenAPIRuntime)' LocalPackages || true
 
-          # Restore optional chaining: StoriesViewController is optional in this source revision.
-          STORIES_FILE="LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift"
-          test -f "$STORIES_FILE"
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift")
-          s = p.read_text()
-          old = "storiesViewController.dismiss("
-          new = "storiesViewController?.dismiss("
-          if old not in s:
-              raise SystemExit("Expected non-optional dismiss calls were not found")
-          p.write_text(s.replace(old, new))
-          print("Restored optional chaining for StoriesViewController")
-          PY
-          grep -n 'storiesViewController.*dismiss' "$STORIES_FILE"
-
       - name: Run DemoBalanceStore tests
         working-directory: ${{ github.workspace }}/work/Keeper
         run: make test_app TEST_ONLY=AppTests/DemoBalanceStoreTests

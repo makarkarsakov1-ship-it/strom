@@ -87,6 +87,12 @@ jobs:
           echo "Remaining generated public imports:"
           grep -R -nE '(@_spi\(Generated\) public import|^public import (struct )?Foundation\.|^public import OpenAPIRuntime)' LocalPackages || true
 
+          # Fix stale optional chaining in bundled StoriesPresenter for current Swift.
+          STORIES_FILE="LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift"
+          test -f "$STORIES_FILE"
+          sed -i '' 's/storiesViewController?\\.dismiss(/storiesViewController.dismiss(/g' "$STORIES_FILE"
+          grep -n 'storiesViewController.*dismiss' "$STORIES_FILE"
+
       - name: Run DemoBalanceStore tests
         working-directory: ${{ github.workspace }}/work/Keeper
         run: make test_app TEST_ONLY=AppTests/DemoBalanceStoreTests

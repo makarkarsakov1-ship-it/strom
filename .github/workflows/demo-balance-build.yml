@@ -90,7 +90,18 @@ jobs:
           # Fix stale optional chaining in bundled StoriesPresenter for current Swift.
           STORIES_FILE="LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift"
           test -f "$STORIES_FILE"
-          perl -0pi -e 's/storiesViewController\\?\\.dismiss\\(/storiesViewController.dismiss(/g' "$STORIES_FILE"
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift")
+          s = p.read_text()
+          old = "storiesViewController?.dismiss("
+          new = "storiesViewController.dismiss("
+          if old not in s:
+              raise SystemExit("Expected stale optional chain was not found")
+          p.write_text(s.replace(old, new))
+          print("Patched StoriesPresenter optional chaining")
+          PY
+          grep -n 'storiesViewController.*dismiss' "$STORIES_FILE"
           grep -n 'storiesViewController.*dismiss' "$STORIES_FILE"
 
       - name: Run DemoBalanceStore tests

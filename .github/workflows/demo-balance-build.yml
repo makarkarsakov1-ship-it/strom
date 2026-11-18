@@ -103,8 +103,8 @@ jobs:
           if not stories.is_file():
               raise SystemExit(f"Missing expected source file: {stories}")
           story_source = stories.read_text()
-          pattern = r"(?m)^(\\s*)storiesViewController\\?\\.dismiss\\(animated: true, completion:"
-          story_source, patched = re.subn(pattern, r"\\1storiesViewController.dismiss(animated: true, completion:", story_source)
+          pattern = r"(?m)^(\s*)storiesViewController\?\.dismiss\(animated: true, completion:"
+          story_source, patched = re.subn(pattern, r"\1storiesViewController.dismiss(animated: true, completion:", story_source)
           if patched != 1:
               raise SystemExit(f"Expected exactly one non-optional StoriesPresenter completion call, patched {patched}")
           stories.write_text(story_source)

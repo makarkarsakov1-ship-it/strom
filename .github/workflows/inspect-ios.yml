@@ -18,7 +18,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f sources.zip
           mkdir -p extracted
           ditto -x -k sources.zip extracted
           ROOT="$(find extracted -type d -name Keeper -maxdepth 4 | head -1)"
@@ -28,33 +27,30 @@ jobs:
             xcodebuild -version
             swift --version
             echo
-            echo "=== PROJECT ROOT ==="
-            echo "$ROOT"
+            echo "=== DEMO BALANCE IMPLEMENTATION SEARCH ==="
+            rg -n -i "DemoBalance|demo.balance|balanceOverride|overrideBalance|mockBalance" "$ROOT" --glob '*.swift' --glob '*.yml' --glob '*.yaml' || true
             echo
-            for file in AGENTS.md CLAUDE.md README.md Makefile mise.toml; do
-              if [ -f "$ROOT/$file" ]; then
-                echo "=== $file ==="
-                sed -n '1,260p' "$ROOT/$file"
-                echo
-              fi
-            done
-            echo "=== EXISTING IOS WORKFLOWS ==="
-            find "$ROOT/.github/workflows" -maxdepth 1 -type f -name '*.yml' -o -name '*.yaml' | sort | while read -r file; do
-              echo "--- $file"
-              sed -n '1,260p' "$file"
-            done
+            echo "=== DEMO BALANCE SOURCE FILES ==="
+            find "$ROOT" -type f \( -iname '*DemoBalance*' -o -iname '*Balance*Override*' \) | sort
+            while IFS= read -r file; do
+              echo
+              echo "--- SOURCE: $file"
+              sed -n '1,320p' "$file"
+            done < <(find "$ROOT" -type f \( -iname '*DemoBalance*' -o -iname '*Balance*Override*' \) | sort)
+            echo
+            echo "=== APP TESTS MATCHING DEMO BALANCE ==="
+            rg -n -C 5 "DemoBalance|demo.balance|balanceOverride" "$ROOT" --glob '*Tests*.swift' || true
+            echo
+            echo "=== EXISTING IOS WORKFLOW ==="
+            if [ -f "$ROOT/.github/workflows/ios-demo-balance.yml" ]; then
+              sed -n '1,260p' "$ROOT/.github/workflows/ios-demo-balance.yml"
+            fi
             echo
             echo "=== PROJECT AND SCHEMES ==="
             xcodebuild -list -project "$ROOT/Keeper.xcodeproj"
             echo
-            echo "=== PROJECT BUILD SETTINGS (APP SCHEMES) ==="
-            for scheme in Keeper KeeperDev App; do
-              echo "--- scheme: $scheme"
-              xcodebuild -showBuildSettings -project "$ROOT/Keeper.xcodeproj" -scheme "$scheme" 2>/dev/null | grep -E '^[[:space:]]*(PRODUCT_BUNDLE_IDENTIFIER|IPHONEOS_DEPLOYMENT_TARGET|SWIFT_VERSION|PRODUCT_NAME|CODE_SIGN_ENTITLEMENTS|INFOPLIST_FILE|SUPPORTED_PLATFORMS|TARGETED_DEVICE_FAMILY) =' | sort -u || true
-            done
-            echo
-            echo "=== ZIP TOP-LEVEL ==="
-            find extracted -maxdepth 2 -type f | sort | head -100
+            echo "=== REPOSITORY ROOT FILES ==="
+            find "$ROOT" -maxdepth 2 -type f | sort | head -200
           } | tee project-inspection.txt
 
       - name: Upload inspection report

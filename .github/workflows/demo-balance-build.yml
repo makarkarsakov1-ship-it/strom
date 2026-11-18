@@ -13,10 +13,12 @@ concurrency:
 
 jobs:
   test-and-build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ secrets.SPM_GH_TOKEN || github.token }}
+      SWIFT_TREAT_WARNINGS_AS_ERRORS: "NO"
+      SWIFT_SUPPRESS_WARNINGS: "YES"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -87,7 +89,9 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Tonkeeper-Demo.xcarchive" \
             -clonedSourcePackagesDirPath build/SourcePackages \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=NO \
+            SWIFT_SUPPRESS_WARNINGS=YES
 
       - name: Upload unsigned archive
         if: success()

@@ -1,0 +1,55 @@
+name: Inspect iOS project
+
+on:
+  push:
+    paths:
+      - "sources.zip"
+      - ".github/workflows/inspect-ios.yml"
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract sources archive
+        run: |
+          set -euo pipefail
+          test -f sources.zip
+          mkdir -p extracted
+          ditto -x -k sources.zip extracted
+          echo "=== FILE TREE ==="
+          find extracted -maxdepth 5 -type f | sort | head -500
+          echo "=== XCODE PROJECTS ==="
+          find extracted -type d \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+          echo "=== SWIFT PACKAGES ==="
+          find extracted -name Package.swift -print
+          {
+            echo "=== FILE TREE ==="
+            find extracted -maxdepth 5 -type f | sort | head -500
+            echo
+            echo "=== XCODE PROJECTS / WORKSPACES ==="
+            find extracted -type d \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+            echo
+            echo "=== SWIFT PACKAGES ==="
+            find extracted -name Package.swift -print
+            echo
+            echo "=== XCODE BUILD TARGETS ==="
+            while IFS= read -r project; do
+              echo "--- $project"
+              xcodebuild -list -project "$project" || true
+            done < <(find extracted -name "*.xcodeproj" -type d)
+            while IFS= read -r workspace; do
+              echo "--- $workspace"
+              xcodebuild -list -workspace "$workspace" || true
+            done < <(find extracted -name "*.xcworkspace" -type d)
+          } | tee project-inspection.txt
+
+      - name: Upload inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-project-inspection
+          path: project-inspection.txt
+          if-no-files-found: error

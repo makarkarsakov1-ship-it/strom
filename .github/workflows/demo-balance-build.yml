@@ -70,6 +70,20 @@ jobs:
           echo "Swift package resolution failed after 3 attempts" >&2
           exit 1
 
+      - name: Patch generated Swift imports for compiler compatibility
+        working-directory: ${{ github.workspace }}/work/Keeper
+        run: |
+          set -euo pipefail
+          API_DIR="LocalPackages/KeeperCore/Packages/TKPerpsAPI/Sources/TKPerpsAPI"
+          test -d "$API_DIR"
+          find "$API_DIR" -name '*.swift' -print0 | while IFS= read -r -d '' file; do
+            sed -i '' \
+              -e 's/@_spi(Generated) public import/@_spi(Generated) import/g' \
+              -e 's/^public import /import /g' "$file"
+          done
+          echo "Patched generated imports:"
+          grep -R -nE '(^| )public import|@_spi\(Generated\) public import' "$API_DIR" || true
+
       - name: Run DemoBalanceStore tests
         working-directory: ${{ github.workspace }}/work/Keeper
         run: make test_app TEST_ONLY=AppTests/DemoBalanceStoreTests

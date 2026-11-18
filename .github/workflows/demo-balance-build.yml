@@ -75,17 +75,31 @@ jobs:
         run: |
           set -euo pipefail
           test -d LocalPackages
-          find LocalPackages -path '*/Sources/*' -name '*.swift' -print0 | while IFS= read -r -d '' file; do
-            if grep -qE '(@_spi\\(Generated\\) public import|^public import (struct )?Foundation\\.|^public import OpenAPIRuntime)' "$file"; then
-              sed -i '' \
-                -e 's/@_spi(Generated) public import/@_spi(Generated) import/g' \
-                -e 's/^public import struct Foundation\\./import struct Foundation./g' \
-                -e 's/^public import OpenAPIRuntime/import OpenAPIRuntime/g' \
-                "$file"
-            fi
-          done
+          python3 - <<'PY'
+          from pathlib import Path
+
+          roots = Path("LocalPackages")
+          replacements = {
+              "@_spi(Generated) public import": "@_spi(Generated) import",
+              "public import struct Foundation.": "import struct Foundation.",
+              "public import Foundation.": "import Foundation.",
+              "public import OpenAPIRuntime": "import OpenAPIRuntime",
+          }
+          changed = 0
+          for path in roots.rglob("*.swift"):
+              if "Sources" not in path.parts:
+                  continue
+              source = path.read_text()
+              updated = source
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != source:
+                  path.write_text(updated)
+                  changed += 1
+          print(f"Patched generated imports in {changed} Swift files")
+          PY
           echo "Remaining generated public imports:"
-          grep -R -nE '(@_spi\\(Generated\\) public import|^public import (struct )?Foundation\\.|^public import OpenAPIRuntime)' LocalPackages || true
+          grep -R -nE '(@_spi\(Generated\) public import|^public import (struct )?Foundation\.|^public import OpenAPIRuntime)' LocalPackages || true
 
       - name: Run DemoBalanceStore tests
         working-directory: ${{ github.workspace }}/work/Keeper

@@ -9,42 +9,52 @@ on:
 
 jobs:
   inspect:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract sources archive
+      - name: Extract and inspect project
+        shell: bash
         run: |
           set -euo pipefail
           test -f sources.zip
           mkdir -p extracted
           ditto -x -k sources.zip extracted
-          echo "=== FILE TREE ==="
-          find extracted -maxdepth 5 -type f | sort | head -500
-          echo "=== XCODE PROJECTS ==="
-          find extracted -type d \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
-          echo "=== SWIFT PACKAGES ==="
-          find extracted -name Package.swift -print
+          ROOT="$(find extracted -type d -name Keeper -maxdepth 4 | head -1)"
+          test -n "$ROOT"
           {
-            echo "=== FILE TREE ==="
-            find extracted -maxdepth 5 -type f | sort | head -500
+            echo "=== TOOLCHAIN ==="
+            xcodebuild -version
+            swift --version
             echo
-            echo "=== XCODE PROJECTS / WORKSPACES ==="
-            find extracted -type d \( -name "*.xcodeproj" -o -name "*.xcworkspace" \) -print
+            echo "=== PROJECT ROOT ==="
+            echo "$ROOT"
             echo
-            echo "=== SWIFT PACKAGES ==="
-            find extracted -name Package.swift -print
+            for file in AGENTS.md CLAUDE.md README.md Makefile mise.toml; do
+              if [ -f "$ROOT/$file" ]; then
+                echo "=== $file ==="
+                sed -n '1,260p' "$ROOT/$file"
+                echo
+              fi
+            done
+            echo "=== EXISTING IOS WORKFLOWS ==="
+            find "$ROOT/.github/workflows" -maxdepth 1 -type f -name '*.yml' -o -name '*.yaml' | sort | while read -r file; do
+              echo "--- $file"
+              sed -n '1,260p' "$file"
+            done
             echo
-            echo "=== XCODE BUILD TARGETS ==="
-            while IFS= read -r project; do
-              echo "--- $project"
-              xcodebuild -list -project "$project" || true
-            done < <(find extracted -name "*.xcodeproj" -type d)
-            while IFS= read -r workspace; do
-              echo "--- $workspace"
-              xcodebuild -list -workspace "$workspace" || true
-            done < <(find extracted -name "*.xcworkspace" -type d)
+            echo "=== PROJECT AND SCHEMES ==="
+            xcodebuild -list -project "$ROOT/Keeper.xcodeproj"
+            echo
+            echo "=== PROJECT BUILD SETTINGS (APP SCHEMES) ==="
+            for scheme in Keeper KeeperDev App; do
+              echo "--- scheme: $scheme"
+              xcodebuild -showBuildSettings -project "$ROOT/Keeper.xcodeproj" -scheme "$scheme" 2>/dev/null | grep -E '^[[:space:]]*(PRODUCT_BUNDLE_IDENTIFIER|IPHONEOS_DEPLOYMENT_TARGET|SWIFT_VERSION|PRODUCT_NAME|CODE_SIGN_ENTITLEMENTS|INFOPLIST_FILE|SUPPORTED_PLATFORMS|TARGETED_DEVICE_FAMILY) =' | sort -u || true
+            done
+            echo
+            echo "=== ZIP TOP-LEVEL ==="
+            find extracted -maxdepth 2 -type f | sort | head -100
           } | tee project-inspection.txt
 
       - name: Upload inspection report

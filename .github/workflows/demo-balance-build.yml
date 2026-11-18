@@ -1,0 +1,99 @@
+name: Demo Balance tests and iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "sources.zip"
+      - ".github/workflows/demo-balance-build.yml"
+
+concurrency:
+  group: demo-balance-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    runs-on: macos-26
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ secrets.SPM_GH_TOKEN || github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Tonkeeper source
+        run: |
+          mkdir -p work
+          ditto -x -k sources.zip work
+          ROOT="$(find work -maxdepth 4 -type d -name Keeper | head -1)"
+          test -n "$ROOT"
+          echo "PROJECT_ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Install project toolchain
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          working_directory: ${{ github.workspace }}/work/Keeper
+
+      - name: Select Xcode
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun simctl list devices available | head -30
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/work/Keeper/build/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: demo-balance-spm-${{ runner.os }}-${{ hashFiles('sources.zip') }}
+          restore-keys: |
+            demo-balance-spm-${{ runner.os }}-
+
+      - name: Resolve Swift packages with retries
+        working-directory: ${{ github.workspace }}/work/Keeper
+        run: |
+          set -euo pipefail
+          mkdir -p build/SourcePackages
+          for attempt in 1 2 3; do
+            echo "SwiftPM resolve attempt $attempt/3"
+            if xcodebuild -resolvePackageDependencies \
+              -project Keeper.xcodeproj -scheme App \
+              -clonedSourcePackagesDirPath build/SourcePackages; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 20)); fi
+          done
+          echo "Swift package resolution failed after 3 attempts" >&2
+          exit 1
+
+      - name: Run DemoBalanceStore tests
+        working-directory: ${{ github.workspace }}/work/Keeper
+        run: make test_app TEST_ONLY=AppTests/DemoBalanceStoreTests
+
+      - name: Run secure-mode integration tests
+        working-directory: ${{ github.workspace }}/work/Keeper
+        run: make test_app TEST_ONLY=AppTests/MultichainAssetsListSecureModeTests
+
+      - name: Build unsigned iOS archive
+        working-directory: ${{ github.workspace }}/work/Keeper
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project Keeper.xcodeproj \
+            -scheme Keeper \
+            -configuration KeeperDebug \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Tonkeeper-Demo.xcarchive" \
+            -clonedSourcePackagesDirPath build/SourcePackages \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload unsigned archive
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tonkeeper-demo-unsigned-archive
+          path: ${{ runner.temp }}/Tonkeeper-Demo.xcarchive
+          if-no-files-found: error
+          compression-level: 1

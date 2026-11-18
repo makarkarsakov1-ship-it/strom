@@ -74,15 +74,18 @@ jobs:
         working-directory: ${{ github.workspace }}/work/Keeper
         run: |
           set -euo pipefail
-          API_DIR="LocalPackages/KeeperCore/Packages/TKPerpsAPI/Sources/TKPerpsAPI"
-          test -d "$API_DIR"
-          find "$API_DIR" -name '*.swift' -print0 | while IFS= read -r -d '' file; do
-            sed -i '' \
-              -e 's/@_spi(Generated) public import/@_spi(Generated) import/g' \
-              -e 's/^public import /import /g' "$file"
+          test -d LocalPackages
+          find LocalPackages -path '*/Sources/*' -name '*.swift' -print0 | while IFS= read -r -d '' file; do
+            if grep -qE '(@_spi\(Generated\) public import|^public import (struct )?Foundation\.|^public import OpenAPIRuntime)' "$file"; then
+              sed -i '' \
+                -e 's/@_spi(Generated) public import/@_spi(Generated) import/g' \
+                -e 's/^public import struct Foundation\./import struct Foundation./g' \
+                -e 's/^public import OpenAPIRuntime/import OpenAPIRuntime/g' \
+                "$file"
+            fi
           done
-          echo "Patched generated imports:"
-          grep -R -nE '(^| )public import|@_spi\(Generated\) public import' "$API_DIR" || true
+          echo "Remaining generated public imports:"
+          grep -R -nE '(@_spi\(Generated\) public import|^public import (struct )?Foundation\.|^public import OpenAPIRuntime)' LocalPackages || true
 
       - name: Run DemoBalanceStore tests
         working-directory: ${{ github.workspace }}/work/Keeper

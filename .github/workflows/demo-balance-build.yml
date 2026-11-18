@@ -90,7 +90,7 @@ jobs:
           # Fix stale optional chaining in bundled StoriesPresenter for current Swift.
           STORIES_FILE="LocalPackages/AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift"
           test -f "$STORIES_FILE"
-          sed -i '' 's/storiesViewController?\\.dismiss(/storiesViewController.dismiss(/g' "$STORIES_FILE"
+          perl -0pi -e 's/storiesViewController\\?\\.dismiss\\(/storiesViewController.dismiss(/g' "$STORIES_FILE"
           grep -n 'storiesViewController.*dismiss' "$STORIES_FILE"
 
       - name: Run DemoBalanceStore tests

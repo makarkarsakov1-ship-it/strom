@@ -96,20 +96,19 @@ jobs:
               if updated != source:
                   path.write_text(updated)
                   changed += 1
-          # Fix the known Swift 6 optional-chaining error in StoriesPresenter.
+          # Only the completion-handler call uses a non-optional controller.
+          # Other dismiss calls in this file have optional controllers and must retain ?.
+          import re
           stories = roots / "AppModules/Stories/Sources/Stories/Presenter/StoriesPresenter.swift"
           if not stories.is_file():
               raise SystemExit(f"Missing expected source file: {stories}")
           story_source = stories.read_text()
-          stale = "storiesViewController?.dismiss("
-          fixed = "storiesViewController.dismiss("
-          if stale in story_source:
-              stories.write_text(story_source.replace(stale, fixed))
-              print("Patched StoriesPresenter optional chaining")
-          elif fixed in story_source:
-              print("StoriesPresenter optional chaining already correct")
-          else:
-              raise SystemExit("StoriesPresenter dismiss call did not match expected source")
+          pattern = r"(?m)^(\\s*)storiesViewController\\?\\.dismiss\\(animated: true, completion:"
+          story_source, patched = re.subn(pattern, r"\\1storiesViewController.dismiss(animated: true, completion:", story_source)
+          if patched != 1:
+              raise SystemExit(f"Expected exactly one non-optional StoriesPresenter completion call, patched {patched}")
+          stories.write_text(story_source)
+          print("Patched exactly one non-optional StoriesPresenter completion call")
           print(f"Patched generated imports in {changed} Swift files")
           PY
           echo "Remaining generated public imports:"
